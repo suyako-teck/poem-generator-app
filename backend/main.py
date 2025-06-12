@@ -6,8 +6,6 @@ import boto3
 import os
 from dotenv import load_dotenv
 import requests
-from sqlalchemy.orm import Session
-from fastapi import Depends
 
 # 環境変数の読み込み
 load_dotenv()
@@ -93,7 +91,6 @@ async def upload_photo(file: UploadFile = File(...)):
 
 @app.post("/submit-character")
 async def submit_character(character: CharacterInfo):
-    # TODO: データベースへの保存処理を実装
     return {
         "message": "キャラクター情報が登録されました",
         "character": character
@@ -107,8 +104,7 @@ async def generate_poem(source: str, character_id: Optional[int] = None):
             prompt = "画像から感じられる雰囲気や感情を表現した、叙情的なポエムを生成してください。"
         else:
             # キャラクター情報からの生成ロジック
-            character = db.query(Character).filter(Character.id == character_id).first()
-            prompt = f"キャラクター「{character.name}」の特徴（{character.traits}）を活かし、その世界観を表現したポエムを生成してください。"
+            prompt = f"キャラクターの特徴を活かし、その世界観を表現したポエムを生成してください。"
 
         generated_text = generate_text(prompt)
         
@@ -119,20 +115,6 @@ async def generate_poem(source: str, character_id: Optional[int] = None):
             }
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/rate-poem")
-async def rate_poem(poem_id: int, rating: str, db: Session = Depends(get_db)):
-    try:
-        new_rating = Rating(
-            poem_id=poem_id,
-            rating=rating
-        )
-        db.add(new_rating)
-        db.commit()
-        return {"message": "評価が保存されました"}
-    except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
