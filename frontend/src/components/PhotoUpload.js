@@ -5,6 +5,8 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 const PhotoUpload = () => {
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -38,7 +40,7 @@ const PhotoUpload = () => {
       const file = await fetch(preview).then(r => r.blob());
       formData.append('file', file);
 
-      const response = await axios.post('http://localhost:8000/upload-photo', formData, {
+      const response = await axios.post(`${API_URL}/upload-photo`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

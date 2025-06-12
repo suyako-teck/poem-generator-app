@@ -11,6 +11,8 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 const PoemGenerator = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -37,7 +39,7 @@ const PoemGenerator = () => {
       const source = location.state.imageData ? 'image' : 'character';
       const data = location.state.imageData || location.state.characterData;
 
-      const response = await axios.post('http://localhost:8000/generate-poem', {
+      const response = await axios.post(`${API_URL}/generate-poem`, {
         source,
         ...data
       });
@@ -56,7 +58,7 @@ const PoemGenerator = () => {
 
   const handleRate = async (rating) => {
     try {
-      await axios.post('http://localhost:8000/rate-poem', {
+      await axios.post(`${API_URL}/rate-poem`, {
         poem_id: poem.id,
         rating
       });

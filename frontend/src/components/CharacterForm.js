@@ -11,6 +11,8 @@ import {
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 const CharacterForm = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -36,7 +38,7 @@ const CharacterForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:8000/submit-character', formData);
+      await axios.post(`${API_URL}/submit-character`, formData);
       setSnackbar({
         open: true,
         message: 'キャラクター情報が登録されました',
