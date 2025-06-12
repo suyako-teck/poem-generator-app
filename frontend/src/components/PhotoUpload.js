@@ -1,0 +1,104 @@
+import React, { useCallback, useState } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { Box, Typography, Paper, Button } from '@mui/material';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+
+const PhotoUpload = () => {
+  const [preview, setPreview] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const navigate = useNavigate();
+
+  const onDrop = useCallback((acceptedFiles) => {
+    const file = acceptedFiles[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'image/*': ['.jpeg', '.jpg', '.png']
+    },
+    maxFiles: 1
+  });
+
+  const handleUpload = async () => {
+    if (!preview) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      const file = await fetch(preview).then(r => r.blob());
+      formData.append('file', file);
+
+      const response = await axios.post('http://localhost:8000/upload-photo', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      // アップロード成功後、ポエム生成画面へ遷移
+      navigate('/generate', { state: { imageData: response.data } });
+    } catch (error) {
+      console.error('アップロードエラー:', error);
+      alert('アップロードに失敗しました。');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <Box sx={{ maxWidth: 600, mx: 'auto', mt: 4, p: 2 }}>
+      <Typography variant="h4" gutterBottom align="center">
+        写真をアップロード
+      </Typography>
+      
+      <Paper
+        {...getRootProps()}
+        sx={{
+          p: 3,
+          textAlign: 'center',
+          cursor: 'pointer',
+          bgcolor: isDragActive ? 'action.hover' : 'background.paper',
+          border: '2px dashed',
+          borderColor: isDragActive ? 'primary.main' : 'grey.300',
+        }}
+      >
+        <input {...getInputProps()} />
+        <CloudUploadIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+        <Typography>
+          {isDragActive
+            ? '写真をドロップしてください'
+            : '写真をドラッグ＆ドロップするか、クリックして選択してください'}
+        </Typography>
+      </Paper>
+
+      {preview && (
+        <Box sx={{ mt: 2, textAlign: 'center' }}>
+          <img
+            src={preview}
+            alt="プレビュー"
+            style={{ maxWidth: '100%', maxHeight: 300 }}
+          />
+          <Button
+            variant="contained"
+            onClick={handleUpload}
+            disabled={uploading}
+            sx={{ mt: 2 }}
+          >
+            {uploading ? 'アップロード中...' : 'アップロード'}
+          </Button>
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+export default PhotoUpload; 
