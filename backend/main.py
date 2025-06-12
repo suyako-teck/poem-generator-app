@@ -5,7 +5,7 @@ from typing import Optional
 import boto3
 import os
 from dotenv import load_dotenv
-from openai import OpenAI
+import requests
 from sqlalchemy.orm import Session
 from fastapi import Depends
 
@@ -30,7 +30,36 @@ s3_client = boto3.client(
     aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
 )
 
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+# Hugging Face APIの設定
+HF_API_URL = "https://api-inference.huggingface.co/models/cyberagent/open-calm-7b"
+HF_API_KEY = os.getenv('HUGGINGFACE_API_KEY')
+
+def generate_text(prompt: str) -> str:
+    if not HF_API_KEY:
+        raise HTTPException(status_code=500, detail="Hugging Face API is not configured")
+    
+    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+    
+    # プロンプトの最適化
+    system_prompt = "あなたは詩人です。以下の条件に基づいて、美しいポエムを生成してください。"
+    full_prompt = f"{system_prompt}\n\n条件：{prompt}\n\nポエム："
+    
+    payload = {
+        "inputs": full_prompt,
+        "parameters": {
+            "max_length": 120,
+            "temperature": 0.8,
+            "top_p": 0.95,
+            "repetition_penalty": 1.2,
+            "do_sample": True
+        }
+    }
+    
+    response = requests.post(HF_API_URL, headers=headers, json=payload)
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail="Failed to generate text")
+    
+    return response.json()[0]["generated_text"]
 
 class CharacterInfo(BaseModel):
     name: str
@@ -75,21 +104,18 @@ async def generate_poem(source: str, character_id: Optional[int] = None):
     try:
         if source == "image":
             # 画像からの生成ロジック
-            prompt = "画像の雰囲気に合わせたポエムを生成してください"
+            prompt = "画像から感じられる雰囲気や感情を表現した、叙情的なポエムを生成してください。"
         else:
             # キャラクター情報からの生成ロジック
             character = db.query(Character).filter(Character.id == character_id).first()
-            prompt = f"キャラクター「{character.name}」の特徴を活かしたポエムを生成してください"
+            prompt = f"キャラクター「{character.name}」の特徴（{character.traits}）を活かし、その世界観を表現したポエムを生成してください。"
 
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}]
-        )
+        generated_text = generate_text(prompt)
         
         return {
             "message": "ポエムが生成されました",
             "poem": {
-                "content": response.choices[0].message.content
+                "content": generated_text
             }
         }
     except Exception as e:
