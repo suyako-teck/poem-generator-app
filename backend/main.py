@@ -15,7 +15,11 @@ app = FastAPI(title="ポエム生成API")
 # CORSの設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv('FRONTEND_URL', 'http://localhost:3000')],
+    allow_origins=[
+        os.getenv('FRONTEND_URL', 'http://localhost:3000'),
+        'https://poemgenerator-fx25s3x99-suyako-tecks-projects.vercel.app',
+        'https://poem-generator-app.vercel.app'
+    ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT"],
     allow_headers=["*"],
