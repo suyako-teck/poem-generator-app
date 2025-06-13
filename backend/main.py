@@ -2,10 +2,10 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
-import boto3
 import os
 from dotenv import load_dotenv
 import requests
+import base64
 
 # 環境変数の読み込み
 load_dotenv()
@@ -25,13 +25,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# S3クライアントの設定
-s3_client = boto3.client(
-    's3',
-    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-    region_name='ap-northeast-1'
-)
+# ImgBB APIの設定
+IMGBB_API_KEY = os.getenv('IMGBB_API_KEY')
+IMGBB_API_URL = "https://api.imgbb.com/1/upload"
 
 # Hugging Face APIの設定
 HF_API_URL = "https://api-inference.huggingface.co/models/cyberagent/open-calm-7b"
@@ -77,40 +73,40 @@ async def root():
 @app.post("/upload-photo")
 async def upload_photo(file: UploadFile = File(...)):
     try:
-        # AWS認証情報のチェック
-        if not all([
-            os.getenv('AWS_ACCESS_KEY_ID'),
-            os.getenv('AWS_SECRET_ACCESS_KEY'),
-            os.getenv('AWS_S3_BUCKET')
-        ]):
+        # ImgBB APIキーのチェック
+        if not IMGBB_API_KEY:
             raise HTTPException(
                 status_code=500,
-                detail="AWS credentials are not properly configured"
+                detail="ImgBB API key is not configured"
             )
 
-        # S3にアップロード
-        bucket_name = os.getenv('AWS_S3_BUCKET')
-        file_location = f"uploads/{file.filename}"
-        
-        try:
-            s3_client.upload_fileobj(
-                file.file,
-                bucket_name,
-                file_location,
-                ExtraArgs={'ACL': 'public-read'}
-            )
-        except Exception as s3_error:
+        # ファイルを読み込んでbase64エンコード
+        file_content = await file.read()
+        encoded_file = base64.b64encode(file_content).decode('utf-8')
+
+        # ImgBBにアップロード
+        payload = {
+            'key': IMGBB_API_KEY,
+            'image': encoded_file
+        }
+
+        response = requests.post(IMGBB_API_URL, data=payload)
+        if response.status_code != 200:
             raise HTTPException(
                 status_code=500,
-                detail=f"S3 upload failed: {str(s3_error)}"
+                detail=f"ImgBB upload failed: {response.text}"
             )
-        
-        # アップロードされたファイルのURLを生成
-        file_url = f"https://{bucket_name}.s3.ap-northeast-1.amazonaws.com/{file_location}"
-        
+
+        result = response.json()
+        if not result.get('success'):
+            raise HTTPException(
+                status_code=500,
+                detail="ImgBB upload failed"
+            )
+
         return {
             "filename": file.filename,
-            "location": file_url
+            "location": result['data']['url']
         }
     except HTTPException as he:
         raise he
