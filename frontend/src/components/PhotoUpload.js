@@ -5,7 +5,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_URL = process.env.REACT_APP_API_URL || 'https://poem-app-backend.onrender.com';
 
 const PhotoUpload = () => {
   const [preview, setPreview] = useState(null);
@@ -44,13 +44,14 @@ const PhotoUpload = () => {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        withCredentials: true
       });
 
       // アップロード成功後、ポエム生成画面へ遷移
       navigate('/generate', { state: { imageData: response.data } });
     } catch (error) {
       console.error('アップロードエラー:', error);
-      alert('アップロードに失敗しました。');
+      alert(error.response?.data?.detail || 'アップロードに失敗しました。');
     } finally {
       setUploading(false);
     }

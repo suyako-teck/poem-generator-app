@@ -27,7 +27,8 @@ app.add_middleware(
     allow_origins=[
         os.getenv('FRONTEND_URL', 'http://localhost:3000'),
         'https://poemgenerator-fx25s3x99-suyako-tecks-projects.vercel.app',
-        'https://poem-generator-app.vercel.app'
+        'https://poem-generator-app.vercel.app',
+        'https://poemgenerator-7iettbhbu-suyako-tecks-projects.vercel.app'
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT"],
