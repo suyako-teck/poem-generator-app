@@ -1,16 +1,25 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
 import os
 from dotenv import load_dotenv
 import requests
-import base64
+import shutil
+from datetime import datetime
 
 # 環境変数の読み込み
 load_dotenv()
 
 app = FastAPI(title="ポエム生成API")
+
+# アップロードディレクトリの作成
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# 静的ファイルのマウント
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # CORSの設定
 app.add_middleware(
@@ -24,10 +33,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT"],
     allow_headers=["*"],
 )
-
-# ImgBB APIの設定
-IMGBB_API_KEY = os.getenv('IMGBB_API_KEY')
-IMGBB_API_URL = "https://api.imgbb.com/1/upload"
 
 # Hugging Face APIの設定
 HF_API_URL = "https://api-inference.huggingface.co/models/cyberagent/open-calm-7b"
@@ -73,43 +78,22 @@ async def root():
 @app.post("/upload-photo")
 async def upload_photo(file: UploadFile = File(...)):
     try:
-        # ImgBB APIキーのチェック
-        if not IMGBB_API_KEY:
-            raise HTTPException(
-                status_code=500,
-                detail="ImgBB API key is not configured"
-            )
+        # ファイル名にタイムスタンプを追加して一意にする
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{timestamp}_{file.filename}"
+        file_path = os.path.join(UPLOAD_DIR, filename)
 
-        # ファイルを読み込んでbase64エンコード
-        file_content = await file.read()
-        encoded_file = base64.b64encode(file_content).decode('utf-8')
+        # ファイルを保存
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-        # ImgBBにアップロード
-        payload = {
-            'key': IMGBB_API_KEY,
-            'image': encoded_file
-        }
-
-        response = requests.post(IMGBB_API_URL, data=payload)
-        if response.status_code != 200:
-            raise HTTPException(
-                status_code=500,
-                detail=f"ImgBB upload failed: {response.text}"
-            )
-
-        result = response.json()
-        if not result.get('success'):
-            raise HTTPException(
-                status_code=500,
-                detail="ImgBB upload failed"
-            )
-
+        # ファイルのURLを生成
+        file_url = f"/uploads/{filename}"
+        
         return {
-            "filename": file.filename,
-            "location": result['data']['url']
+            "filename": filename,
+            "location": file_url
         }
-    except HTTPException as he:
-        raise he
     except Exception as e:
         raise HTTPException(
             status_code=500,
