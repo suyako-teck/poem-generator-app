@@ -76,22 +76,44 @@ async def root():
 @app.post("/upload-photo")
 async def upload_photo(file: UploadFile = File(...)):
     try:
+        # AWS認証情報のチェック
+        if not all([
+            os.getenv('AWS_ACCESS_KEY_ID'),
+            os.getenv('AWS_SECRET_ACCESS_KEY'),
+            os.getenv('AWS_S3_BUCKET')
+        ]):
+            raise HTTPException(
+                status_code=500,
+                detail="AWS credentials are not properly configured"
+            )
+
         # S3にアップロード
         bucket_name = os.getenv('AWS_S3_BUCKET')
         file_location = f"uploads/{file.filename}"
         
-        s3_client.upload_fileobj(
-            file.file,
-            bucket_name,
-            file_location
-        )
+        try:
+            s3_client.upload_fileobj(
+                file.file,
+                bucket_name,
+                file_location
+            )
+        except Exception as s3_error:
+            raise HTTPException(
+                status_code=500,
+                detail=f"S3 upload failed: {str(s3_error)}"
+            )
         
         return {
             "filename": file.filename,
             "location": f"s3://{bucket_name}/{file_location}"
         }
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Upload failed: {str(e)}"
+        )
 
 @app.post("/submit-character")
 async def submit_character(character: CharacterInfo):
