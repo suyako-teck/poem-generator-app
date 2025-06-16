@@ -38,13 +38,10 @@ const PoemGenerator = () => {
   });
 
   useEffect(() => {
-    if (!location.state) {
-      navigate('/');
-      return;
+    if (location.state?.imageData || location.state?.characterData) {
+      generatePoem();
     }
-
-    generatePoem();
-  }, [location.state]);
+  }, [location.state, generatePoem, navigate]);
 
   const generatePoem = async () => {
     setLoading(true);

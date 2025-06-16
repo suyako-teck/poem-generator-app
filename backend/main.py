@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -8,6 +8,23 @@ from dotenv import load_dotenv
 import requests
 import shutil
 from datetime import datetime
+import logging
+import sys
+import json
+from fastapi.security import APIKeyHeader
+from fastapi import Security
+
+# ロギングの設定
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('app.log')
+    ]
+)
+
+logger = logging.getLogger(__name__)
 
 # 環境変数の読み込み
 load_dotenv()
@@ -24,16 +41,34 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 # CORSの設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        os.getenv('FRONTEND_URL', 'http://localhost:3000'),
-        'https://poemgenerator-fx25s3x99-suyako-tecks-projects.vercel.app',
-        'https://poem-generator-app.vercel.app',
-        'https://poemgenerator-7iettbhbu-suyako-tecks-projects.vercel.app'
-    ],
+    allow_origins=["*"],  # 開発中は全てのオリジンを許可
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT"],
+    allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
+
+# リクエストログミドルウェア
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger.info(f"Request: {request.method} {request.url}")
+    logger.info(f"Headers: {dict(request.headers)}")
+    
+    try:
+        body = await request.body()
+        if body:
+            logger.info(f"Request body: {body.decode()}")
+    except Exception as e:
+        logger.error(f"Error reading request body: {str(e)}")
+    
+    response = await call_next(request)
+    
+    # CORSヘッダーの追加
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    
+    return response
 
 # Hugging Face APIの設定
 HF_API_URL = "https://api-inference.huggingface.co/models/cyberagent/open-calm-7b"
@@ -87,13 +122,34 @@ class SNSShareRequest(BaseModel):
     platform: str  # "twitter", "facebook", "instagram"
     image_url: Optional[str] = None
 
+api_key_header = APIKeyHeader(name="X-API-Key")
+
 @app.get("/")
 async def root():
     return {"message": "ポエム生成APIへようこそ"}
 
 @app.post("/upload-photo")
-async def upload_photo(file: UploadFile = File(...)):
+async def upload_photo(
+    file: UploadFile = File(...),
+    api_key: str = Security(api_key_header)
+):
+    # APIキーの検証
+    if api_key != os.getenv("API_KEY"):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key"
+        )
     try:
+        logger.info(f"Received file upload request: {file.filename}")
+        # ファイルサイズの制限を設定
+        if file.size > 5 * 1024 * 1024:  # 5MB制限
+            raise HTTPException(status_code=400, detail="ファイルサイズが大きすぎます")
+        
+        # 許可するファイル形式を制限
+        allowed_types = ["image/jpeg", "image/png", "image/gif"]
+        if file.content_type not in allowed_types:
+            raise HTTPException(status_code=400, detail="許可されていないファイル形式です")
+        
         # ファイル名にタイムスタンプを追加して一意にする
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{timestamp}_{file.filename}"
@@ -106,11 +162,14 @@ async def upload_photo(file: UploadFile = File(...)):
         # ファイルのURLを生成
         file_url = f"/uploads/{filename}"
         
+        logger.info(f"File uploaded successfully: {file_url}")
+        
         return {
             "filename": filename,
             "location": file_url
         }
     except Exception as e:
+        logger.error(f"Error in upload_photo: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Upload failed: {str(e)}"
@@ -118,10 +177,18 @@ async def upload_photo(file: UploadFile = File(...)):
 
 @app.post("/submit-character")
 async def submit_character(character: CharacterInfo):
-    return {
-        "message": "キャラクター情報が登録されました",
-        "character": character
-    }
+    try:
+        logger.info(f"Received character submission: {character.dict()}")
+        return {
+            "message": "キャラクター情報が登録されました",
+            "character": character
+        }
+    except Exception as e:
+        logger.error(f"Error in submit_character: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"キャラクター情報の登録に失敗しました: {str(e)}"
+        )
 
 @app.post("/generate-poem")
 async def generate_poem(request: PoemRequest):
@@ -175,4 +242,9 @@ async def share_on_sns(request: SNSShareRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        log_level="debug"
+    ) 

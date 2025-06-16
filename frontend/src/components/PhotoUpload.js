@@ -44,14 +44,31 @@ const PhotoUpload = () => {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        withCredentials: true
+        withCredentials: true,
+        timeout: 30000,
+        validateStatus: function (status) {
+          return status >= 200 && status < 500;
+        }
       });
 
-      // アップロード成功後、ポエム生成画面へ遷移
-      navigate('/generate', { state: { imageData: response.data } });
+      if (response.status === 200) {
+        navigate('/generate', { state: { imageData: response.data } });
+      } else {
+        throw new Error(response.data.detail || 'アップロードに失敗しました');
+      }
     } catch (error) {
       console.error('アップロードエラー:', error);
-      alert(error.response?.data?.detail || 'アップロードに失敗しました。');
+      let errorMessage = 'アップロードに失敗しました。';
+      
+      if (error.response) {
+        errorMessage = error.response.data?.detail || errorMessage;
+      } else if (error.request) {
+        errorMessage = 'サーバーからの応答がありません。ネットワーク接続を確認してください。';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'タイムアウトしました。時間をおいて再度お試しください。';
+      }
+      
+      alert(errorMessage);
     } finally {
       setUploading(false);
     }
