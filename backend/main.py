@@ -72,6 +72,21 @@ class CharacterInfo(BaseModel):
     traits: str
     quotes: Optional[str] = None
 
+class PoemRequest(BaseModel):
+    source: str
+    character_id: Optional[int] = None
+    imageData: Optional[dict] = None
+    characterData: Optional[CharacterInfo] = None
+
+class PoemCustomizeRequest(BaseModel):
+    poem_id: int
+    content: str
+
+class SNSShareRequest(BaseModel):
+    poem_id: int
+    platform: str  # "twitter", "facebook", "instagram"
+    image_url: Optional[str] = None
+
 @app.get("/")
 async def root():
     return {"message": "ポエム生成APIへようこそ"}
@@ -109,14 +124,17 @@ async def submit_character(character: CharacterInfo):
     }
 
 @app.post("/generate-poem")
-async def generate_poem(source: str, character_id: Optional[int] = None):
+async def generate_poem(request: PoemRequest):
     try:
-        if source == "image":
+        if request.source == "image":
             # 画像からの生成ロジック
             prompt = "画像から感じられる雰囲気や感情を表現した、叙情的なポエムを生成してください。"
         else:
             # キャラクター情報からの生成ロジック
-            prompt = f"キャラクターの特徴を活かし、その世界観を表現したポエムを生成してください。"
+            if request.characterData:
+                prompt = f"以下のキャラクター情報を基に、その世界観を表現したポエムを生成してください。\n名前：{request.characterData.name}\n作品：{request.characterData.work}\n特徴：{request.characterData.traits}\nセリフ：{request.characterData.quotes if request.characterData.quotes else 'なし'}"
+            else:
+                prompt = "キャラクターの特徴を活かし、その世界観を表現したポエムを生成してください。"
 
         generated_text = generate_text(prompt)
         
@@ -125,6 +143,32 @@ async def generate_poem(source: str, character_id: Optional[int] = None):
             "poem": {
                 "content": generated_text
             }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/customize-poem")
+async def customize_poem(request: PoemCustomizeRequest):
+    try:
+        # ここでデータベースに保存する処理を実装
+        return {
+            "message": "ポエムが更新されました",
+            "poem": {
+                "id": request.poem_id,
+                "content": request.content
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/share-on-sns")
+async def share_on_sns(request: SNSShareRequest):
+    try:
+        # SNS連携の実装
+        # 実際のSNS APIとの連携は、各プラットフォームのAPIキーが必要
+        return {
+            "message": f"{request.platform}への共有が完了しました",
+            "share_url": f"https://{request.platform}.com/share/{request.poem_id}"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
