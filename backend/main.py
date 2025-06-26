@@ -138,18 +138,17 @@ async def root():
     return {"message": "ポエム生成APIへようこそ"}
 
 @app.post("/upload-photo")
-async def upload_photo(
-    file: UploadFile = File(...),
-    api_key: str = Security(api_key_header)
-):
-    # APIキーの検証
-    if api_key != os.getenv("API_KEY"):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid API key"
-        )
+async def upload_photo(file: UploadFile = File(...)):
+    # APIキー認証を一時的に無効化
+    # api_key: str = Security(api_key_header)
+    # if api_key != os.getenv("API_KEY"):
+    #     raise HTTPException(
+    #         status_code=401,
+    #         detail="Invalid API key"
+    #     )
     try:
         logger.info(f"Received file upload request: {file.filename}")
+        
         # ファイルサイズの制限を設定
         if file.size > 5 * 1024 * 1024:  # 5MB制限
             raise HTTPException(status_code=400, detail="ファイルサイズが大きすぎます")
